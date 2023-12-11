@@ -88,10 +88,13 @@ const processM3U = (source, model) => {
     stream.on('data', (line) => {	  
 	  // First line
       if (line.match(M3UFilePrefix)) {
-		result.filePrefix = line;
+		result.filePrefix = line + '\n';
 
 	  // EXTINF lines
       } else if (line.match(M3UPrefix)) {
+		// Make sure no matadata is stored as we're now starting to process a new channel
+		delete fields['metadata'];
+		
         // We get fields
         const matches = line.match(M3UFields);
         try {
