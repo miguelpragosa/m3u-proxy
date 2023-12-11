@@ -115,12 +115,19 @@ const processM3U = (source, model) => {
             }
           }
         }
+
         // Do we need to apply transformations?
         if (valid && model.transformations) {
           for (let i = 0; i < model.transformations.length; i++) {
+            if (model.transformations[i].delete && model.transformations[i].regex.test(fields[model.transformations[i].field])) {
+              valid = false;
+              break;
+            }
+
             fields[model.transformations[i].field] = fields[model.transformations[i].field].replace(model.transformations[i].regex, model.transformations[i].substitution);
           }
         }
+        
         if (valid) streams.push(fields);
         fields = {};
       }
