@@ -27,20 +27,31 @@ const getFile = (url, filename) => {
     // Prepare destination
     const dirname = path.dirname(filename);
     if (!fs.existsSync(dirname)) fs.mkdirSync(dirname, { recursive: true });
-    const file = fs.createWriteStream(filename + '.tmp');
+	
     // and download
     get({ url: url, rejectUnauthorized: false }, (error, response) => {
+	  if (response) {
+	    debug(` └get: error=${error}; response.statusCode=${response.statusCode}`);
+	  } else {
+	    debug(` └get: error=${error}; response=${response}`);
+	  }
+	  
       if (error) {
-        fs.unlinkSync(filename + '.tmp');
-        // reject(new Error(`Failed to load resource: ${url}`));
         throw error;
       }
+	  
+	  if (response && response.statusCode != 200) {
+		throw new Error(`Failed to load resource: ${url}`);
+	  }
+	  
       // pipe received data
-      response.pipe(file);
+      const tmpFilename = filename + '.tmp';
+      const tmpFile = fs.createWriteStream(tmpFilename);
+      response.pipe(tmpFile);
       // and close
       response.on('end', () => {
         if (fs.existsSync(filename)) fs.unlinkSync(filename);
-        fs.renameSync(filename + '.tmp', filename);
+        fs.renameSync(tmpFilename, filename);
         debug(` └getFile: ${filename}`);
         resolve();
       });
