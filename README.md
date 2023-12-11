@@ -31,11 +31,6 @@ Process/simplify and potentially serve M3U &amp; EPG files from your IPTV provid
               "substitution": "$1"
             },
             {
-              "field": "group-title",
-              "regex": "(ES|FR).*",
-              "delete": "true"
-            },
-            {
               "field": "tvg-name",
               "regex": "(.*?) *: *(.*)",
               "substitution": "$1: $2"
