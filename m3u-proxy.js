@@ -63,6 +63,7 @@ const getFile = (url, filename) => {
 const M3UFilePrefix = /^#EXTM3U/;
 const M3UPrefix = /^#EXTINF/;
 const M3UFields = /^#EXTINF:-?\d+,?(?: *?([\w-]*)="(.*?)")?(?: *?([\w-]*)="(.*?)")?(?: *?([\w-]*)="(.*?)")?(?: *?([\w-]*)="(.*?)")?(?: *?([\w-]*)="(.*?)")?.*,(.*)/;
+const StreamPrefix = /^http/;
 
 const processM3U = (source, model) => {
   debug(` ┌M3U-Process: ${source.name}${model.name}`);
@@ -77,18 +78,22 @@ const processM3U = (source, model) => {
 
     // Loop
     const stream = byline.createStream(fs.createReadStream(`${config.importFolder}/${source.name}.m3u`, { encoding: 'utf8' }));
-    const streams = [];
+	
+	const result = {
+      filePrefix: "",
+	  streams: [],
+    };
+	
     let fields = {};
-    stream.on('data', (line) => {
-      // byline skips empty lines
+    stream.on('data', (line) => {	  
+	  // First line
       if (line.match(M3UFilePrefix)) {
-        // First line
+		result.filePrefix = line;
 
+	  // EXTINF lines
       } else if (line.match(M3UPrefix)) {
         // We get fields
         const matches = line.match(M3UFields);
-        // if (!matches) {
-        // }
         try {
           for (let i = 1; i < 8; i += 2) {
             if (matches[i]) fields[matches[i]] = matches[i + 1];
@@ -96,11 +101,11 @@ const processM3U = (source, model) => {
           if (!fields['tvg-name']) fields['tvg-name'] = matches[11].trim();
           if (!fields['group-title']) fields['group-title'] = fields['tvg-name'].match(/\w*/); // Compact M3U files = no group-title
         } catch (err) {
-          //console.error(line);
+          // Do nothing
         }
-
-      } else {
-        // And stream URL
+		
+	  // Stream URL
+      } else if (line.match(StreamPrefix)) {
         fields['stream'] = line;
         // Now let's check filters
         let valid;
@@ -115,37 +120,46 @@ const processM3U = (source, model) => {
             }
           }
         }
+
         // Do we need to apply transformations?
         if (valid && model.transformations) {
           for (let i = 0; i < model.transformations.length; i++) {
             fields[model.transformations[i].field] = fields[model.transformations[i].field].replace(model.transformations[i].regex, model.transformations[i].substitution);
           }
         }
-        if (valid) streams.push(fields);
+        
+        if (valid) result.streams.push(fields);
         fields = {};
+
+      // Remaining lines (metadata)
+      } else {
+		if (!fields['metadata']) fields['metadata'] = ""
+        fields['metadata'] += line + '\n';
       }
     });
     stream.on('end', () => {
       debug(` └M3U-Process: ${source.name}${model.name}`);
-      resolve(streams);
+      resolve(result);
     });
   });
 };
 
-const exportM3U = (source, model, streams) => {
+const exportM3U = (source, model, result) => {
   debug(` ┌M3U-Write: ${source.name}${model.name}`);
   return new Promise(resolve => {
     // Prepare destination
     if (!fs.existsSync(`${config.exportFolder}`)) fs.mkdirSync(`${config.exportFolder}`, { recursive: true });
     const file = fs.createWriteStream(`${config.exportFolder}/${source.name}${model.name}.m3u`);
     // And export
-    file.write('#EXTM3U\n');
-    streams.forEach(stream => {
+    file.write(result.filePrefix);
+	
+    result.streams.forEach(stream => {
       file.write(`#EXTINF:-1`);
       if (stream['tvg-id']) file.write(` tvg-id="${stream['tvg-id']}"`);
       if (stream['tvg-name']) file.write(` tvg-name="${stream['tvg-name']}"`);
       if (stream['tvg-logo']) file.write(` tvg-logo="${stream['tvg-logo']}"`);
       file.write(` group-title="${stream['group-title']}",${stream['tvg-name']}\n`);
+	  if (stream['metadata']) file.write(`${stream['metadata']}`);
       file.write(`${stream['stream']}\n`);
     });
     file.end();
@@ -213,8 +227,8 @@ const processSource = async (source) => {
   if (source.epg) {
     try {
       await getFile(source.epg, `${config.importFolder}/${source.name}.xml`);
-      streams = await processM3U(source, source.models[0]);
-      await processEPG(source, streams.map(x => x['tvg-id']));
+      result = await processM3U(source, source.models[0]);
+      await processEPG(source, result.streams.map(x => x['tvg-id']));
     } catch (err) {
       console.log(err);
     }
