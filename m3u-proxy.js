@@ -74,6 +74,7 @@ const processM3U = (source, model) => {
     if (model.transformations) {
       for (let i = 0; i < model.transformations.length; i++) model.transformations[i].regex = new RegExp(model.transformations[i].regex, 'i');
     }
+
     // Loop
     const stream = byline.createStream(fs.createReadStream(`${config.importFolder}/${source.name}.m3u`, { encoding: 'utf8' }));
     const streams = [];
@@ -82,6 +83,7 @@ const processM3U = (source, model) => {
       // byline skips empty lines
       if (line.match(M3UFilePrefix)) {
         // First line
+
       } else if (line.match(M3UPrefix)) {
         // We get fields
         const matches = line.match(M3UFields);
@@ -94,8 +96,9 @@ const processM3U = (source, model) => {
           if (!fields['tvg-name']) fields['tvg-name'] = matches[11].trim();
           if (!fields['group-title']) fields['group-title'] = fields['tvg-name'].match(/\w*/); // Compact M3U files = no group-title
         } catch (err) {
-          console.error(line);
+          //console.error(line);
         }
+
       } else {
         // And stream URL
         fields['stream'] = line;
